@@ -46,7 +46,8 @@ int	accept_client(int server_fd)
 	fd = accept(server_fd, NULL, NULL);
 	if (fd == -1)
 	{
-		perror("accept");
+		if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+			perror("accept");
 		return (-1);
 	}
 	return (fd);
