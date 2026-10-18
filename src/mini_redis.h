@@ -5,6 +5,12 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+
+
+// TABLE : 
 
 typedef struct s_drawer
 {
@@ -24,8 +30,17 @@ unsigned long	hash(const char *s);
 t_table			*table_new(size_t capacity);
 void			table_free(t_table *tab);
 char			*table_get(t_table *tab, char *key);
-int			table_set(t_table *tab, char *key, char *value);
+int				table_set(t_table *tab, char *key, char *value);
 int				table_del(t_table *tab, char *key);
 int				table_resize(t_table *tab);
+
+
+
+// SERVER :
+
+int				accept_client(int server_fd);
+int				echo_loop(int client_fd);
+int     		create_server_socket(int port);
+
 
 #endif

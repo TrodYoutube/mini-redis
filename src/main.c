@@ -1,6 +1,6 @@
 #include "mini_redis.h"
 
-#define N 100000
+/* #define N 100000
 
 static size_t	max_chain(t_table *tab)
 {
@@ -65,5 +65,30 @@ int	main(void)
 	printf("erreurs de relecture : %zu\n", errors);
 
 	table_free(tab);
+	return (0);
+} */
+
+int	main(void)
+{
+	int	server_fd;
+	int	client_fd;
+	int	x;
+
+	server_fd = create_server_socket(6380);
+	if (server_fd == -1)
+		return (1);
+	client_fd = accept_client(server_fd);
+	if (client_fd == -1)
+	{
+		close(server_fd);
+		return (1);
+	}
+	printf("Client : %d\n", client_fd);
+	printf("Server : %d\n", server_fd);
+	x = echo_loop(client_fd);
+	close(client_fd);
+	close(server_fd);
+	if (x == -1)
+		return (1);
 	return (0);
 }
