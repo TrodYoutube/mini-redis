@@ -52,33 +52,105 @@ int	accept_client(int server_fd)
 	return (fd);
 }
 
-int	echo_loop(int client_fd)
+int	set_nonblocking(int fd)
 {
-	ssize_t		x;
-	ssize_t		v;
-	char		buff[1024];
+	int	x;
 
-	x = 1;
-	while (x > 0)
+	x =	fcntl(fd, F_GETFL);
+	if (x == -1)
 	{
-		x = read(client_fd, buff, sizeof(buff));
-		if (x > 0)
+		perror("Get Flags");
+		return (-1);
+	}
+	if (fcntl(fd, F_SETFL, O_NONBLOCK | x) == -1)	
+	{
+		perror("Set Flags");
+		return (-1);
+	}
+	return (1);
+}
+
+int	epoll_add(int epfd, int fd)
+{
+	struct epoll_event ev;
+
+	memset(&ev, 0, sizeof(struct epoll_event));
+	ev.events = EPOLLIN;
+	ev.data.fd = fd;
+	if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev) == -1)
+	{
+		perror("epoll_ctl");
+		return (-1);
+	}
+	return (1);
+}
+
+int	accept_new_client(int epfd, int server_fd)
+{
+	int	fd;
+
+	fd = accept_client(server_fd);
+	if (fd == -1)
+		return (-1);
+	if (set_nonblocking(fd) == -1)
+	{
+		close (fd);
+		return (-1);
+	}
+	if (epoll_add(epfd, fd) == -1)
+	{
+		close(fd);
+		return (-1);
+	}
+	return (1);
+}
+
+int	close_client(int epfd, int fd)
+{
+	if (epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL) == -1)
+	{
+		perror("Delete from CTL");
+		close(fd);
+		return (-1);
+	}
+	close(fd);
+	return(1);
+}
+
+int	handle_client(int epfd, int client_fd)
+{
+	char	buff[1024];
+	ssize_t	x;
+	ssize_t	y;
+
+	x = read(client_fd, buff, 1024);
+	if (x > 0)
+	{
+		y = write(client_fd, buff, x);
+		if (y == -1)
 		{
-			v = write(client_fd, buff, x);
-			if (0 <= v && v < x)
-			{
-				perror("partial write failed");
-				return (-1);
-			}
-			if (v < x)
-			{
-				perror("write failed");
-				return (-1);
-			}
+			perror("Write Failed");
+			close_client(epfd, client_fd);
+			return (-1);
 		}
-		else if (x < 0)
+		if (y < x)
 		{
-			perror("read");
+			fprintf(stderr, "partial write\n");
+			close_client(epfd, client_fd);
+			return (-1);
+		}
+	}
+	if (x == 0)
+	{
+		close_client(epfd, client_fd);
+		return (1);
+	}
+	if (x == -1)
+	{
+		if (errno != EAGAIN && errno != EINTR && errno != EWOULDBLOCK)
+		{
+			perror("Read Failed");
+			close_client(epfd, client_fd);
 			return (-1);
 		}
 	}

@@ -1,94 +1,62 @@
 #include "mini_redis.h"
 
-/* #define N 100000
-
-static size_t	max_chain(t_table *tab)
-{
-	size_t		i;
-	size_t		len;
-	size_t		max;
-	t_drawer	*cur;
-
-	i = 0;
-	max = 0;
-	while (i < tab->capacity)
-	{
-		len = 0;
-		cur = tab->buckets[i];
-		while (cur)
-		{
-			len++;
-			cur = cur->next;
-		}
-		if (len > max)
-			max = len;
-		i++;
-	}
-	return (max);
-}
-
-int	main(void)
-{
-	t_table	*tab;
-	char	key[32];
-	char	val[32];
-	char	*res;
-	size_t	errors;
-	int		i;
-
-	tab = table_new(4);
-	if (!tab)
-		return (1);
-
-	i = 0;
-	while (i < N)
-	{
-		snprintf(key, sizeof(key), "key%d", i);
-		snprintf(val, sizeof(val), "val%d", i);
-		table_set(tab, key, val);
-		i++;
-	}
-	printf("apres insertions : size %zu | capacity %zu | plus longue chaine %zu\n",
-		tab->size, tab->capacity, max_chain(tab));
-
-	errors = 0;
-	i = 0;
-	while (i < N)
-	{
-		snprintf(key, sizeof(key), "key%d", i);
-		snprintf(val, sizeof(val), "val%d", i);
-		res = table_get(tab, key);
-		if (!res || strcmp(res, val))
-			errors++;
-		i++;
-	}
-	printf("erreurs de relecture : %zu\n", errors);
-
-	table_free(tab);
-	return (0);
-} */
-
 int	main(void)
 {
 	int	server_fd;
-	int	client_fd;
+	int	fd;
+	int	i;
 	int	x;
-
+	int	epfd;
+	struct epoll_event events[64];
+	
+	signal(SIGPIPE, SIG_IGN);
 	server_fd = create_server_socket(6380);
 	if (server_fd == -1)
 		return (1);
-	client_fd = accept_client(server_fd);
-	if (client_fd == -1)
+	if (set_nonblocking(server_fd) == -1)
 	{
+		perror("Server cannot be initialize");
 		close(server_fd);
 		return (1);
 	}
-	printf("Client : %d\n", client_fd);
-	printf("Server : %d\n", server_fd);
-	x = echo_loop(client_fd);
-	close(client_fd);
-	close(server_fd);
-	if (x == -1)
+	epfd = epoll_create1(0);
+	if (epfd == -1)
+	{
+		perror("epfd can't be initialize");
+		close(server_fd);
 		return (1);
+	}
+	if (epoll_add(epfd, server_fd) == -1)
+	{
+		close(server_fd);
+		close(epfd);
+		return (1);
+	}
+	while (1)
+	{
+		x = epoll_wait(epfd, events, 64, -1);
+		if (x == -1)
+		{
+			if (errno == EINTR)
+				continue ;
+			else
+			{
+				perror ("Waiting Problem");
+				break ;
+			}
+		}
+		while (i < x)
+		{
+			fd = events[i].data.fd;
+			if (fd == server_fd)
+				accept_new_client(epfd, server_fd);
+			else
+				handle_client(epfd, fd);
+			i++;
+		}
+		i = 0;	
+	}
+	close(server_fd);
+	close(epfd);
 	return (0);
 }
